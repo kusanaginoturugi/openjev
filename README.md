@@ -46,6 +46,19 @@ Each result contains typed option scores, timing, the exact model revision, and 
 
 If every row has the same exact state, switch to `--mode shared` to prefill it once and evaluate the criteria in parallel.
 
+### 12 GiB GPU compatibility
+
+The published measurements use an RTX 3090. A 12 GiB NVIDIA GPU can run short `direct` workloads with the 4B BF16 model, provided the GPU is otherwise free. Transformers' load-time allocator warmup temporarily reserves a large extra allocation, so use the explicit compatibility flag:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 openjev-score --mode direct --skip-allocator-warmup \
+  --model Qwen/Qwen3.5-4B \
+  --revision 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a \
+  --input examples/decisions.jsonl --output results-12gb.jsonl
+```
+
+This changes model loading only; each result records `"allocator_warmup": "skipped"`. It is not comparable to the published RTX 3090 speed measurements. Stop or unload other GPU workloads (for example, a `llama-server`) before loading the model.
+
 ## How it works
 
 ```mermaid

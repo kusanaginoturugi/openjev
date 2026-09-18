@@ -21,6 +21,11 @@ def main() -> None:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument(
+        "--skip-allocator-warmup",
+        action="store_true",
+        help="Skip Transformers' load-time CUDA allocator warmup for memory-constrained GPUs.",
+    )
     args = parser.parse_args()
     if args.output.exists() or args.max_tokens < 1:
         parser.error("Output must be new and max-tokens must be positive")
@@ -29,7 +34,11 @@ def main() -> None:
         parser.error("Input is empty")
     for row in rows:
         validate_row(row)
-    model, tokenizer, metadata = load_causal_model(args.model, args.revision)
+    model, tokenizer, metadata = load_causal_model(
+        args.model,
+        args.revision,
+        skip_allocator_warmup=args.skip_allocator_warmup,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as destination:
         if args.mode == "shared":

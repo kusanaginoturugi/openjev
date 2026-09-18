@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from openjev_phase1.core import direct_messages, softmax, validate_row
+from openjev_phase1.core import _allocator_warmup, direct_messages, softmax, validate_row
 
 
 ROW = {
@@ -46,3 +46,15 @@ def test_structured_json_state_is_supported():
 def test_nonfinite_structured_state_is_rejected():
     with pytest.raises(ValueError, match="finite JSON-compatible"):
         validate_row(dict(ROW, state={"score": float("nan")}))
+
+
+def test_allocator_warmup_can_be_temporarily_skipped():
+    class ModelingUtils:
+        @staticmethod
+        def caching_allocator_warmup(*args, **kwargs):
+            return "warmed"
+
+    original = ModelingUtils.caching_allocator_warmup
+    with _allocator_warmup(ModelingUtils, True):
+        assert ModelingUtils.caching_allocator_warmup() is None
+    assert ModelingUtils.caching_allocator_warmup is original

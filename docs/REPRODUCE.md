@@ -38,6 +38,10 @@ CUDA_VISIBLE_DEVICES=0 openjev-score --mode reranker \
 
 The command refuses an existing output path and refuses silent input truncation. Each output embeds the exact revision, library versions, prompt hash, token count, timings, and an explicit probability-status warning. State may be a nonempty string, JSON object, or JSON array. `serial` caches consecutive equal states. `shared` requires every input row to carry the same exact state and is exercised by the 37×21 runner below.
 
+### 12 GiB GPU compatibility
+
+The published runs use an RTX 3090 and leave the default Transformers allocator warmup enabled. On smaller GPUs, that startup-only optimization can temporarily require another large CUDA allocation even when the model weights themselves fit. To try a short workload on such a GPU, add `--skip-allocator-warmup`; the result metadata records `"allocator_warmup": "skipped"`. This changes loading behavior and is not comparable to the published speed measurements.
+
 ## Third-party evaluations
 
 Raw TypeSafe records are deliberately absent because no explicit redistribution grant was located. Fetch the exact evaluated snapshots, with hash verification:

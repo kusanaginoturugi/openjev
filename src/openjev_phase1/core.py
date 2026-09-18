@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 LETTERS = "ABCDEFGHIJKLMNOP"
@@ -69,10 +70,30 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def load_causal_model(source: str, revision: str):
+@contextmanager
+def _allocator_warmup(modeling_utils, skip: bool):
+    """Optionally skip Transformers' load-time CUDA allocator warmup.
+
+    The warmup only improves model loading speed.  It may temporarily require
+    nearly another full model allocation, which does not fit alongside this
+    BF16 model on 12 GiB GPUs.
+    """
+    if not skip:
+        yield
+        return
+    original = modeling_utils.caching_allocator_warmup
+    modeling_utils.caching_allocator_warmup = lambda *args, **kwargs: None
+    try:
+        yield
+    finally:
+        modeling_utils.caching_allocator_warmup = original
+
+
+def load_causal_model(source: str, revision: str, *, skip_allocator_warmup: bool = False):
     """Load one pinned causal model on the sole visible CUDA device."""
     import torch
     import transformers
+    from transformers import modeling_utils
 
     local = Path(source).exists()
     if not local and not re.fullmatch(r"[0-9a-f]{40}", revision or ""):
@@ -90,15 +111,16 @@ def load_causal_model(source: str, revision: str):
         if cls is None:
             raise RuntimeError("Installed transformers lacks the native Qwen3.5 model")
         config = config.get_text_config()
-    model, loading = cls.from_pretrained(
-        source,
-        config=config,
-        dtype=torch.bfloat16,
-        device_map={"": "cuda:0"},
-        low_cpu_mem_usage=True,
-        output_loading_info=True,
-        **common,
-    )
+    with _allocator_warmup(modeling_utils, skip_allocator_warmup):
+        model, loading = cls.from_pretrained(
+            source,
+            config=config,
+            dtype=torch.bfloat16,
+            device_map={"": "cuda:0"},
+            low_cpu_mem_usage=True,
+            output_loading_info=True,
+            **common,
+        )
     if any(loading.get(key) for key in ("missing_keys", "mismatched_keys", "error_msgs")):
         raise RuntimeError(f"Checkpoint did not load completely: {loading}")
     model.eval()
@@ -108,5 +130,6 @@ def load_causal_model(source: str, revision: str):
         "dtype": "bfloat16",
         "torch_version": torch.__version__,
         "transformers_version": transformers.__version__,
+        "allocator_warmup": "skipped" if skip_allocator_warmup else "enabled",
     }
     return model, tokenizer, metadata
