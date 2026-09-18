@@ -59,6 +59,18 @@ CUDA_VISIBLE_DEVICES=0 openjev-score --mode direct --skip-allocator-warmup \
 
 This changes model loading only; each result records `"allocator_warmup": "skipped"`. It is not comparable to the published RTX 3090 speed measurements. Stop or unload other GPU workloads (for example, a `llama-server`) before loading the model.
 
+### llama-server backend (experimental)
+
+`direct` scoring can also use a local [llama.cpp](https://github.com/ggml-org/llama.cpp) server with a GGUF model already resident in GPU memory. This path validates that `A`, `B`, and so on are single tokens for the selected server model, reads its one-token option probabilities, and returns only the declared-option distribution. It is not numerically comparable with the Transformers path: the server model, quantization, prompt template, and sampling backend may differ.
+
+```bash
+openjev-score --backend llama-server --server http://127.0.0.1:8080 \
+  --mode direct --model lfm2.5-2.6b \
+  --input examples/decisions.jsonl --output llama-server-results.jsonl
+```
+
+Only `direct` mode is supported. The server must be running and have the requested model available.
+
 ## How it works
 
 ```mermaid

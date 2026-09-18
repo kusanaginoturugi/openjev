@@ -42,6 +42,10 @@ The command refuses an existing output path and refuses silent input truncation.
 
 The published runs use an RTX 3090 and leave the default Transformers allocator warmup enabled. On smaller GPUs, that startup-only optimization can temporarily require another large CUDA allocation even when the model weights themselves fit. To try a short workload on such a GPU, add `--skip-allocator-warmup`; the result metadata records `"allocator_warmup": "skipped"`. This changes loading behavior and is not comparable to the published speed measurements.
 
+### Experimental llama-server scoring
+
+The experimental `llama-server` backend uses a local GGUF model and llama.cpp's `/apply-template`, `/tokenize`, and `/completion` APIs. It validates every option label at the server tokenizer boundary, then applies equal positive logit bias to those labels and normalizes the returned post-sampling probabilities. Run it with `--backend llama-server --server http://127.0.0.1:8080 --mode direct --model MODEL_ALIAS`. Its model format, quantization, prompt rendering, and readout differ from the pinned Transformers baselines; do not combine its results with published measurements.
+
 ## Third-party evaluations
 
 Raw TypeSafe records are deliberately absent because no explicit redistribution grant was located. Fetch the exact evaluated snapshots, with hash verification:

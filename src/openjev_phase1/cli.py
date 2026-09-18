@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .core import load_causal_model, validate_row
 from .direct import score as direct_score
+from .llama_server import LlamaServerClient, score as llama_server_score
 from .reranker import score as reranker_score
 from .serial import SerialPrefixScorer
 from .shared import score_shared
@@ -16,8 +17,10 @@ from .shared import score_shared
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("direct", "serial", "shared", "reranker"), required=True)
+    parser.add_argument("--backend", choices=("transformers", "llama-server"), default="transformers")
+    parser.add_argument("--server", help="llama-server base URL, required with --backend llama-server")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--revision", required=True)
+    parser.add_argument("--revision")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-tokens", type=int, default=4096)
@@ -34,6 +37,22 @@ def main() -> None:
         parser.error("Input is empty")
     for row in rows:
         validate_row(row)
+    if args.backend == "llama-server":
+        if args.mode != "direct":
+            parser.error("llama-server currently supports only --mode direct")
+        if not args.server:
+            parser.error("--server is required with --backend llama-server")
+        if args.skip_allocator_warmup:
+            parser.error("--skip-allocator-warmup applies only to --backend transformers")
+        client = LlamaServerClient(args.server, args.model)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open("x") as destination:
+            for row in rows:
+                destination.write(json.dumps(llama_server_score(client, row, args.max_tokens), allow_nan=False) + "\n")
+                destination.flush()
+        return
+    if not args.revision:
+        parser.error("--revision is required with --backend transformers")
     model, tokenizer, metadata = load_causal_model(
         args.model,
         args.revision,
